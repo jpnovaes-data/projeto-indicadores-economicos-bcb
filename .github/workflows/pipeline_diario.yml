@@ -1,0 +1,59 @@
+name: Pipeline diario de indicadores economicos
+
+on:
+  schedule:
+    # Roda todo dia as 09:00 UTC (06:00 horario de Brasilia)
+    - cron: "0 9 * * *"
+  workflow_dispatch: {} # permite rodar manualmente pelo GitHub tambem
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ingestao - buscar series do Banco Central
+        run: python scripts/ingest_bcb.py
+
+      - name: Carga - subir dados brutos para o Neon
+        run: python scripts/load_to_neon.py
+
+      - name: Configurar profile do dbt
+        run: |
+          mkdir -p ~/.dbt
+          cat <<EOF > ~/.dbt/profiles.yml
+          dbt_economia:
+            target: prod
+            outputs:
+              prod:
+                type: postgres
+                host: ${{ secrets.DBT_HOST }}
+                user: ${{ secrets.DBT_USER }}
+                password: ${{ secrets.DBT_PASSWORD }}
+                port: 5432
+                dbname: ${{ secrets.DBT_DBNAME }}
+                schema: raw
+                sslmode: require
+                threads: 4
+          EOF
+
+      - name: dbt run - transformar staging e marts
+        working-directory: dbt_economia
+        run: dbt run
+
+      - name: dbt test - validar qualidade dos dados
+        working-directory: dbt_economia
+        run: dbt test

@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: fato_indicadores_economicos
+    description: >
+      Tabela final, granularidade mensal, pronta para consumo no Power BI.
+      Combina cambio, SELIC, IPCA e IGP-M em uma unica linha por mes.
+    columns:
+      - name: mes
+        description: "Primeiro dia do mes de referencia."
+        tests:
+          - unique
+          - not_null

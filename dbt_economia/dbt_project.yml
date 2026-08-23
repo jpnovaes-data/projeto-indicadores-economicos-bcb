@@ -1,0 +1,20 @@
+name: 'dbt_economia'
+version: '1.0.0'
+config-version: 2
+
+profile: 'dbt_economia'
+
+model-paths: ["models"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  dbt_economia:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts

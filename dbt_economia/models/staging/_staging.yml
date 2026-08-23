@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_cambio_dolar
+    description: "Cotacao diaria do dolar, limpa e ordenada."
+    columns:
+      - name: data
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_ipca
+    description: "IPCA mensal, com acumulado de 12 meses calculado."
+    columns:
+      - name: data
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_selic
+    description: "SELIC ao dia, limpa e ordenada."
+    columns:
+      - name: data
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_igpm
+    description: "IGP-M mensal, limpo e ordenado."
+    columns:
+      - name: data
+        tests:
+          - unique
+          - not_null

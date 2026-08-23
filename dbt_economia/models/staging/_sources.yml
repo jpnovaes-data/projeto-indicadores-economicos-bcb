@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: cambio_dolar
+        description: "Cotacao diaria do dolar comercial (venda), serie SGS 1."
+      - name: ipca
+        description: "Variacao mensal do IPCA (%), serie SGS 433."
+      - name: selic
+        description: "Meta SELIC ao dia (%), serie SGS 432."
+      - name: igpm
+        description: "Variacao mensal do IGP-M (%), serie SGS 189."
