@@ -1,10 +1,10 @@
 """
-carrega os CSVs gerados por ingest_bcb.py no banco Postgres (Neon).
+Carrega os CSVs gerados por ingest_bcb.py no banco Postgres (Neon).
 
-cria o schema "raw" e uma tabela por serie economica, sobrescrevendo
+Cria o schema "raw" e uma tabela por serie economica, sobrescrevendo
 os dados a cada execucao (estrategia simples: full refresh).
 
-requer sempre um arquivo .env na raiz do projeto com:
+Requer um arquivo .env na raiz do projeto com:
     DATABASE_URL=postgresql://usuario:senha@host/db?sslmode=require
 """
 
@@ -26,8 +26,8 @@ def conectar():
 
     if not database_url:
         raise RuntimeError(
-            "DATABASE_URL não encontrada. Copie .env.example para .env "
-            "e preencha com a connection string cedido pelo Neon."
+            "DATABASE_URL nao encontrada. Copie .env.example para .env "
+            "e preencha com a connection string do Neon."
         )
 
     engine = create_engine(database_url)
@@ -44,16 +44,26 @@ def carregar_serie(engine, nome: str):
     caminho_csv = RAW_DIR / f"{nome}.csv"
 
     if not caminho_csv.exists():
-        print(f"  AVISO: {caminho_csv} não encontrado, pulando '{nome}'.")
+        print(f"  AVISO: {caminho_csv} nao encontrado, pulando '{nome}'.")
         return
 
     df = pd.read_csv(caminho_csv, parse_dates=["data"])
+
+    with engine.begin() as conn:
+        existe = conn.execute(text(
+            "SELECT to_regclass(:tabela)"
+        ), {"tabela": f"raw.{nome}"}).scalar()
+
+        if existe:
+            # TRUNCATE em vez de DROP: mantem a tabela intacta, entao views
+            # do dbt (staging.*) que dependem dela nao quebram.
+            conn.execute(text(f"TRUNCATE TABLE raw.{nome}"))
 
     df.to_sql(
         name=nome,
         con=engine,
         schema="raw",
-        if_exists="replace", 
+        if_exists="append",  # a tabela ja foi limpa (ou sera criada agora)
         index=False,
     )
 
