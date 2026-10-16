@@ -42,5 +42,10 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Terraform State Check
+        run: |
+          terraform workspace show
+          terraform state list
+
       - name: Terraform Plan
         run: terraform plan -input=false -no-color
