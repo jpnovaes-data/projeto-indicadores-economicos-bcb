@@ -8,6 +8,10 @@ resource "neon_project" "projeto_economia" {
   branch {
     name = "production"
   }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 # O Neon cria automaticamente um endpoint e um role default

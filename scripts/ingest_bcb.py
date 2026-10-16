@@ -1,7 +1,7 @@
 """
 script de ingestao de series economicas do Banco Central do Brasil (SGS).
 
-Fonte: https://api.bcb.gov.br/dados/serie/bcdata.sgs.{codigo}/dados
+fonte: https://api.bcb.gov.br/dados/serie/bcdata.sgs.{codigo}/dados
 
 series utilizadas:
 - 1   -> Dolar comercial (venda), diario

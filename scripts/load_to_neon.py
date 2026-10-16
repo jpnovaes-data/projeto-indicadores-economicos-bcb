@@ -1,10 +1,10 @@
 """
-Carrega os CSVs gerados por ingest_bcb.py no banco Postgres (Neon).
+carrega os CSVs gerados por ingest_bcb.py no banco Postgres (Neon).
 
-Cria o schema "raw" e uma tabela por serie economica, sobrescrevendo
+cria o schema "raw" e uma tabela por serie economica, sobrescrevendo
 os dados a cada execucao (estrategia simples: full refresh).
 
-Requer um arquivo .env na raiz do projeto com:
+requer um arquivo .env na raiz do projeto com:
     DATABASE_URL=postgresql://usuario:senha@host/db?sslmode=require
 """
 

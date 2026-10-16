@@ -3,6 +3,12 @@
 *.tfstate
 *.tfstate.backup
 .terraform/
+*.tfvars
+*.tfvars.json
+crash.log
+override.tf
+override.tf.json
+*.pem
 
 # os dados brutos (podem ser regenerados pelo script de ingestao)
 data/raw/*.csv

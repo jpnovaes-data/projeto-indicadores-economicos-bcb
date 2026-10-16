@@ -1,9 +1,10 @@
 """
-Exporta a tabela marts.fato_indicadores_economicos para docs/data.json.
+exporta a tabela marts.fato_indicadores_economicos para docs/data.json.
 
-Esse JSON e consumido pela pagina estatica docs/index.html (GitHub Pages).
-Roda no GitHub Actions logo depois do dbt, entao o dashboard se atualiza
+esse JSON e consumido pela pagina estatica docs/index.html (GitHub Pages).
+roda no GitHub Actions logo depois do dbt, entao o dashboard se atualiza
 sozinho a cada execucao do pipeline.
+
 """
 
 import json
