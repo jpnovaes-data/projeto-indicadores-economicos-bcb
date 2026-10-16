@@ -1,3 +1,4 @@
+
 name: Terraform Plan
 
 on:
@@ -44,7 +45,10 @@ jobs:
 
       - name: Terraform State Check
         run: |
+          echo "Current Terraform workspace:"
           terraform workspace show
+
+          echo "Resources in Terraform state:"
           terraform state list
 
       - name: Terraform Plan
