@@ -42,5 +42,12 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Terraform State Check
+        run: |
+          echo "Current Terraform workspace:"
+          terraform workspace show
+          echo "Resources in Terraform state:"
+          terraform state list
+
       - name: Terraform Plan
         run: terraform plan -input=false -no-color
