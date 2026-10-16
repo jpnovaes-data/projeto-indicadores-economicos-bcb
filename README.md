@@ -2,9 +2,9 @@
 
 [![Pipeline diário](https://github.com/jpnovaes-data/projeto-indicadores-economicos-bcb/actions/workflows/pipeline_diario.yml/badge.svg)](https://github.com/jpnovaes-data/projeto-indicadores-economicos-bcb/actions/workflows/pipeline_diario.yml)
 
-Pipeline automatizado que coleta séries econômicas da API do Banco Central (SGS), carrega em um Postgres na nuvem, modela os dados em camadas com dbt (com testes de qualidade) e alimenta um dashboard executivo no Power BI. Tudo roda sozinho todos os dias às 06h (horário de Brasília) via GitHub Actions, e a infraestrutura do banco é gerenciada como código com Terraform.
+Pipeline automatizado que coleta séries econômicas da API do Banco Central (SGS), carrega em um Postgres na nuvem, modela os dados em camadas com dbt (com testes de qualidade) e publica um dashboard público no GitHub Pages. Tudo roda sozinho todos os dias às 06h (horário de Brasília) via GitHub Actions, e a infraestrutura do banco é gerenciada como código com Terraform.
 
-![Dashboard](docs/dashboard.png)
+**Dashboard ao vivo:** https://jpnovaes-data.github.io/projeto-indicadores-economicos-bcb/
 
 ## Arquitetura
 
@@ -16,9 +16,10 @@ flowchart LR
     D --> E[("Neon Postgres<br/>schema raw")]
     E --> F["dbt<br/>staging (views)"]
     F --> G["dbt<br/>marts (tabela)"]
-    G --> H["Power BI<br/>dashboard"]
-    I["Terraform"] -. "gerencia" .-> E
-    J["GitHub Actions<br/>cron diário"] -. "orquestra" .-> B
+    G --> H["export_dashboard_data.py<br/>docs/data.json"]
+    H --> I["GitHub Pages<br/>dashboard"]
+    J["Terraform"] -. "gerencia" .-> E
+    K["GitHub Actions<br/>cron diário"] -. "orquestra" .-> B
 ```
 
 ## Stack
@@ -29,8 +30,8 @@ flowchart LR
 | Banco de dados | PostgreSQL 17 no Neon (região São Paulo) |
 | Infraestrutura como código | Terraform (provider kislerdm/neon) |
 | Transformação e testes | dbt-core + dbt-postgres |
-| Orquestração e CI | GitHub Actions |
-| Visualização | Power BI (medidas DAX e tabela calendário em M) |
+| Orquestração, CI e deploy | GitHub Actions |
+| Visualização | HTML + Chart.js, publicado no GitHub Pages |
 
 ## Fontes de dados
 
@@ -50,8 +51,9 @@ A API limita séries diárias a janelas de 10 anos, então a ingestão busca os 
 1. **Ingestão** (`scripts/ingest_bcb.py`): consulta as 4 séries, trata tipos e datas e salva em CSV. Tem 3 tentativas com espera crescente para lidar com timeouts da API.
 2. **Carga** (`scripts/load_to_neon.py`): cria o schema `raw` e carrega cada série com `TRUNCATE` seguido de `INSERT`.
 3. **Transformação** (`dbt_economia/`): 4 views em `staging` (limpeza, tipagem, acumulado de 12 meses do IPCA) e 1 tabela em `marts`.
-4. **Qualidade**: 10 testes dbt (`unique` e `not_null` em todas as chaves de data) rodam a cada execução. Se algum falhar, o workflow falha.
-5. **Consumo**: o Power BI conecta em `marts.fato_indicadores_economicos`.
+4. **Qualidade**: 10 testes dbt (`unique` e `not_null` em todas as chaves de data) rodam a cada execução. Se algum falhar, o workflow falha e o dashboard não é republicado.
+5. **Exportação** (`scripts/export_dashboard_data.py`): lê `marts.fato_indicadores_economicos` e gera `docs/data.json`.
+6. **Publicação**: o job de deploy envia a pasta `docs/` para o GitHub Pages.
 
 ### Modelo de dados
 
@@ -71,11 +73,27 @@ O projeto Neon foi criado pelo console e depois **importado** para o Terraform (
 
 ## CI/CD
 
-O workflow `.github/workflows/pipeline_diario.yml` roda diariamente às 09:00 UTC (06:00 em Brasília) e também sob demanda (`workflow_dispatch`). Credenciais ficam em GitHub Secrets e o `profiles.yml` do dbt é gerado em tempo de execução. Nada sensível vai para o repositório.
+O workflow `.github/workflows/pipeline_diario.yml` roda diariamente às 09:00 UTC (06:00 em Brasília) e também sob demanda (`workflow_dispatch`). Ele tem dois jobs:
+
+- **pipeline**: ingestão, carga, `dbt run`, `dbt test` e exportação dos dados.
+- **deploy**: publica o dashboard no GitHub Pages, e só roda se o job anterior passar.
+
+Credenciais ficam em GitHub Secrets e o `profiles.yml` do dbt é gerado em tempo de execução. Nada sensível vai para o repositório.
 
 ## Dashboard
 
-Painel executivo com KPIs (dólar, Selic, IPCA 12m, IGP-M), evolução do dólar com banda mínimo/máximo, comparação IPCA x IGP-M e inflação x juros. As medidas DAX tratam o "último mês com dado" de cada série separadamente, já que cada indicador é divulgado em um ritmo diferente, e incluem variação do dólar (mês a mês e ano a ano) e juro real aproximado.
+Página estática com KPIs (dólar, Meta Selic, IPCA acumulado em 12 meses e IGP-M), evolução do dólar com banda de mínimo e máximo, Meta Selic, IPCA mensal junto do acumulado em 12 meses e IGP-M. Cada KPI mostra o último mês com dado daquela série, já que cada indicador é divulgado em um ritmo diferente. Tem tema claro e escuro automático.
+
+### Por que GitHub Pages e não Power BI
+
+A primeira ideia era usar Power BI como camada de apresentação. Optei por um dashboard estático pelos seguintes motivos:
+
+- **Acesso imediato**: quem abre o link vê os dados na hora, sem login, licença ou instalação.
+- **Automação completa**: o dashboard é atualizado pelo mesmo pipeline que gera os dados. No Power BI, atualização agendada e compartilhamento público dependem do Power BI Service e de licenças à parte.
+- **Tudo versionado**: a página é código (HTML e JavaScript) e pode ser revisada no Git. Um arquivo `.pbix` é binário e difícil de revisar.
+- **Sem credenciais expostas**: a página lê apenas um JSON estático, sem conexão com o banco.
+
+A camada `marts` continua pronta para ser consumida por Power BI ou qualquer outra ferramenta de BI, se for necessário.
 
 ## Decisões técnicas e aprendizados
 
@@ -83,14 +101,16 @@ Painel executivo com KPIs (dólar, Selic, IPCA 12m, IGP-M), evolução do dólar
 - **Importar, não recriar**: adotar a infraestrutura existente via `terraform import` preserva os dados e evita destruir o banco.
 - **Granularidade mensal no mart**: evita duplicar valores de séries mensais ao cruzar com séries diárias.
 - **Segredos fora do Git**: `.env`, `*.tfstate` (que contém a senha do banco) e os artefatos do dbt estão no `.gitignore`.
+- **Acumulado de 12 meses só quando completo**: nos primeiros 11 meses da série a janela tem menos de 12 valores, então a exportação descarta esses pontos em vez de exibir um acumulado enganoso.
 
 ## Limitações e próximos passos
 
 - Carga em full refresh a cada execução. Com este volume é barato, mas o próximo passo é carga incremental.
+- O IPCA acumulado em 12 meses usa soma simples das variações mensais. O correto é o acumulado composto.
+- A coluna `selic_ao_dia` nos modelos dbt guarda a meta Selic em % ao ano (série 432) e deve ser renomeada.
 - State do Terraform local. Migrar para backend remoto.
 - Testes dbt cobrem apenas unicidade e nulos. Faltam testes de frescor dos dados (`source freshness`) e de faixa de valores.
 - Sem alertas de falha (Slack ou e-mail) no workflow.
-- O arquivo `.pbix` não está versionado no repositório.
 
 ## Como rodar localmente
 
@@ -110,25 +130,35 @@ python scripts/load_to_neon.py
 cd dbt_economia
 dbt run
 dbt test
+cd ..
+
+# dashboard local
+python scripts/export_dashboard_data.py
+python -m http.server --directory docs 8000   # abra http://localhost:8000
 ```
 
 Para provisionar o banco com Terraform (opcional), exporte `NEON_API_KEY` e rode `terraform init` e `terraform plan` dentro de `terraform/`.
+
+Para o deploy no GitHub Pages, cadastre os secrets `DATABASE_URL`, `DBT_HOST`, `DBT_USER`, `DBT_PASSWORD` e `DBT_DBNAME` e, em **Settings, Pages**, selecione **GitHub Actions** como fonte.
 
 ## Estrutura do repositório
 
 ```
 .
-├── .github/workflows/pipeline_diario.yml   # orquestração diária
+├── .github/workflows/pipeline_diario.yml   # ingestão, dbt, testes e deploy
 ├── scripts/
 │   ├── ingest_bcb.py                       # extração da API do BCB
-│   └── load_to_neon.py                     # carga no Postgres
+│   ├── load_to_neon.py                     # carga no Postgres
+│   └── export_dashboard_data.py            # mart para docs/data.json
 ├── dbt_economia/
 │   ├── models/staging/                     # views + fontes + testes
 │   ├── models/marts/                       # fato_indicadores_economicos
-│   └── macros/generate_schema_name.sql
+│   ├── macros/generate_schema_name.sql
+│   └── profiles.yml.example
 ├── terraform/                              # projeto Neon como código
-├── docs/dashboard.png                      # print do painel
-└── requirements.txt
+├── docs/index.html                         # dashboard (GitHub Pages)
+├── requirements.txt
+└── .env.example
 ```
 
 ## Autor
