@@ -163,4 +163,4 @@ Para o deploy no GitHub Pages, cadastre os secrets `DATABASE_URL`, `DBT_HOST`, `
 
 ## Autor
 
-João Pedro Novaes, Analista de Dados. [LinkedIn](https://www.linkedin.com/in/joão-pedro-novaes)
+João Pedro Novaes, Analista de Dados. [LinkedIn](https://www.linkedin.com/in/jpedro-novaes)
