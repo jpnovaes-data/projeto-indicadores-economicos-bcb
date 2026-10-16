@@ -3,5 +3,5 @@ requests==2.32.4
 python-dotenv==1.2.2
 SQLAlchemy==2.0.52
 psycopg2-binary==2.9.12
-dbt-core==1.12.3
+dbt-core==1.12.5
 dbt-postgres==1.11.0
