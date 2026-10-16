@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indicadores Econômicos do Brasil</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --text:#1c1c1a; --muted:#6b6b66; --line:#e3e3de;
+          --c1:#1d6fb8; --c2:#d9622b; --c3:#2a9d6f; --c4:#8a5bc7; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141413; --card:#1f1f1d; --text:#ecebe6; --muted:#9a9990; --line:#33332f;
+            --c1:#5aa7ea; --c2:#f08a56; --c3:#4cc592; --c4:#b48ae8; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:.9rem; margin:0 0 20px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .kpi b { display:block; font-size:1.6rem; margin-top:4px; }
+  .kpi span { color:var(--muted); font-size:.8rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(440px,1fr)); gap:12px; }
+  .card h2 { font-size:1rem; margin:0 0 12px; }
+  .box { position:relative; height:260px; }
+  footer { color:var(--muted); font-size:.8rem; margin-top:20px; }
+  a { color:var(--c1); }
+  @media (max-width:520px) { .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Indicadores Econômicos do Brasil</h1>
+  <p class="sub" id="sub">Carregando dados...</p>
+  <section class="kpis" id="kpis"></section>
+  <section class="grid">
+    <div class="card"><h2>Dólar comercial (R$, média mensal)</h2><div class="box"><canvas id="c-dolar"></canvas></div></div>
+    <div class="card"><h2>Meta Selic (% ao ano)</h2><div class="box"><canvas id="c-selic"></canvas></div></div>
+    <div class="card"><h2>IPCA (%)</h2><div class="box"><canvas id="c-ipca"></canvas></div></div>
+    <div class="card"><h2>IGP-M, variação mensal (%)</h2><div class="box"><canvas id="c-igpm"></canvas></div></div>
+  </section>
+  <footer>
+    Fonte: API SGS do Banco Central do Brasil. Pipeline: Python, Postgres (Neon), Terraform, dbt e GitHub Actions,
+    atualizado diariamente. <a href="https://github.com/jpnovaes-data/projeto-indicadores-economicos-bcb">Código no GitHub</a>.
+  </footer>
+</main>
+<script>
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d = 2) => v == null ? 'n/d' : Number(v).toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d});
+const mesLabel = m => { const [a, n] = m.split('-'); return `${n}/${a}`; };
+
+fetch('data.json').then(r => r.json()).then(({updated_at, rows}) => {
+  document.getElementById('sub').textContent = `Dados mensais consolidados. Última atualização: ${updated_at}`;
+  const labels = rows.map(r => mesLabel(r.mes));
+  const last = k => { for (let i = rows.length - 1; i >= 0; i--) if (rows[i][k] != null) return rows[i]; return null; };
+
+  const kpis = [
+    ['dolar_medio_mes', 'Dólar (média do mês)', v => 'R$ ' + fmt(v)],
+    ['selic_media_mes', 'Meta Selic', v => fmt(v) + '% a.a.'],
+    ['ipca_acumulado_12m', 'IPCA acumulado 12 meses', v => fmt(v) + '%'],
+    ['igpm_variacao_mensal', 'IGP-M no mês', v => fmt(v) + '%'],
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(([k, t, f]) => {
+    const r = last(k);
+    return `<div class="card kpi"><span>${t}</span><b>${r ? f(r[k]) : 'n/d'}</b><span>ref. ${r ? mesLabel(r.mes) : ''}</span></div>`;
+  }).join('');
+
+  const ds = (label, key, color, extra = {}) => ({
+    label, data: rows.map(r => r[key]), borderColor: css(color), backgroundColor: css(color),
+    borderWidth: 2, pointRadius: 0, tension: .2, spanGaps: true, ...extra
+  });
+  const mk = (id, datasets, type = 'line') => new Chart(document.getElementById(id), {
+    type, data: {labels, datasets},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: {mode: 'index', intersect: false},
+      plugins: {legend: {display: datasets.length > 1, labels: {color: css('--muted')}},
+                tooltip: {callbacks: {label: c => `${c.dataset.label}: ${fmt(c.parsed.y)}`}}},
+      scales: {x: {ticks: {color: css('--muted'), maxTicksLimit: 8}, grid: {display: false}},
+               y: {ticks: {color: css('--muted')}, grid: {color: css('--line')}}}
+    }
+  });
+
+  mk('c-dolar', [ds('Média', 'dolar_medio_mes', '--c1'),
+                 ds('Mínimo', 'dolar_minimo_mes', '--c3', {borderWidth: 1, borderDash: [4, 4]}),
+                 ds('Máximo', 'dolar_maximo_mes', '--c2', {borderWidth: 1, borderDash: [4, 4]})]);
+  mk('c-selic', [ds('Meta Selic', 'selic_media_mes', '--c4')]);
+  mk('c-ipca', [ds('Variação mensal', 'ipca_variacao_mensal', '--c2', {type: 'bar', borderWidth: 0}),
+                ds('Acumulado 12 meses', 'ipca_acumulado_12m', '--c1')]);
+  mk('c-igpm', [ds('IGP-M', 'igpm_variacao_mensal', '--c3', {borderWidth: 0})], 'bar');
+}).catch(() => { document.getElementById('sub').textContent = 'Não foi possível carregar data.json.'; });
+</script>
+</body>
+</html>

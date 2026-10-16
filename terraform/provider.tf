@@ -7,6 +7,6 @@ terraform {
   }
 }
 
-# A api_key NUNCA fica hardcoded aqui.
+# A api_key nao fica hardcoded aqui.
 # O provider le automaticamente da variavel de ambiente NEON_API_KEY.
 provider "neon" {}

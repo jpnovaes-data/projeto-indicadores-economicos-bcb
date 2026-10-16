@@ -1,9 +1,9 @@
 """
-Script de ingestao de series economicas do Banco Central do Brasil (SGS).
+script de ingestao de series economicas do Banco Central do Brasil (SGS).
 
 Fonte: https://api.bcb.gov.br/dados/serie/bcdata.sgs.{codigo}/dados
 
-Series utilizadas:
+series utilizadas:
 - 1   -> Dolar comercial (venda), diario
 - 433 -> IPCA, variacao mensal (%)
 - 432 -> Meta SELIC, ao dia (%)
@@ -25,7 +25,7 @@ SERIES = {
     "igpm": 189,
 }
 
-# A API do BCB limita consultas de series diarias a uma janela de 10 anos.
+# A API do BCB limita as consultas de series diarias a uma janela de 10 anos.
 # Usamos 9 anos e meio para ficar com margem de seguranca.
 ANOS_HISTORICO = 9.5
 
