@@ -9,6 +9,10 @@ crash.log
 override.tf
 override.tf.json
 *.pem
+tfplan
+*.tfplan
+docs/data.json
+
 
 # os dados brutos (podem ser regenerados pelo script de ingestao)
 data/raw/*.csv
