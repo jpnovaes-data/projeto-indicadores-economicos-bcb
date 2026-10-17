@@ -2,17 +2,30 @@
 
 ## Como os segredos são tratados
 
-- Credenciais do banco e da API do Neon **nunca** ficam no repositório. Em produção elas vivem em GitHub Secrets (`DATABASE_URL`, `DBT_HOST`, `DBT_USER`, `DBT_PASSWORD`, `DBT_DBNAME`). Localmente, em `.env` e `~/.dbt/profiles.yml`, ambos fora do Git.
-- O `terraform.tfstate` contém a senha do banco em texto puro e está no `.gitignore`.
-- O dashboard publicado no GitHub Pages lê apenas um JSON estático e não tem conexão com o banco.
-- O workflow do dashboard usa permissões mínimas, e o CI do Terraform roda sem nenhum secret.
+- Credenciais, tokens e chaves de API nunca são versionados.
+- O pipeline de dados usa GitHub Secrets: `DATABASE_URL`, `DBT_HOST`, `DBT_USER`, `DBT_PASSWORD` e `DBT_DBNAME`.
+- A automação de infraestrutura usa `TF_API_TOKEN` (HCP Terraform) e `NEON_API_KEY_CI` (API do Neon, no plano).
+- Localmente, as credenciais ficam em `.env` e `~/.dbt/profiles.yml`, fora do Git.
+- O state do Terraform fica no HCP Terraform e pode conter informações sensíveis, então o acesso ao workspace deve ser restrito.
+- O dashboard publicado lê apenas um JSON estático. O navegador não recebe credenciais nem se conecta ao banco.
+- O workflow `Terraform CI` roda sem credenciais. O `Terraform Plan` usa os secrets acima e nunca aplica mudanças.
 
 ## Se um segredo vazar
 
-1. Troque a senha do role no Neon (Console, Roles, Reset password) e atualize os secrets do GitHub e o `.env` local.
-2. Se foi a API key, revogue-a em Account Settings, API Keys, e gere outra.
-3. Remover o arquivo do último commit não basta, porque o histórico do Git guarda o valor. Considere o segredo comprometido e rotacione.
+Considere o valor comprometido, mesmo que o arquivo seja removido depois, porque o histórico do Git o preserva. Atualizar um secret no GitHub não invalida o valor antigo: é preciso revogar ou rotacionar.
+
+1. **Senha do banco:** redefina a senha da role no Neon e atualize os secrets do GitHub, o `.env` e o `~/.dbt/profiles.yml`.
+2. **API key do Neon:** revogue a chave, gere outra e atualize `NEON_API_KEY_CI` e os ambientes locais.
+3. **Token do HCP Terraform:** revogue o token, gere outro e atualize `TF_API_TOKEN`.
+
+Depois da rotação, rode os workflows pertinentes para confirmar que as novas credenciais funcionam.
+
+## State do Terraform
+
+- Não versione `terraform.tfstate`, backups de state nem arquivos de plano.
+- Não compartilhe state por chat, e-mail ou serviços sem proteção.
+- Antes de qualquer importação ou recuperação, consulte o state existente no HCP Terraform para evitar duplicação de recursos.
 
 ## Reportar uma vulnerabilidade
 
-Use a aba **Security** do repositório e a opção de relato privado de vulnerabilidade. Evite abrir issues públicas com detalhes de uma falha.
+Use o relato privado de vulnerabilidades na aba **Security** do repositório. Evite publicar detalhes ou credenciais em issues públicas.
