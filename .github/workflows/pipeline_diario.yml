@@ -1,4 +1,4 @@
-name: Pipeline diario de indicadores economicos
+name: pipeline diario de indicadores economicos
 
 on:
   schedule:
