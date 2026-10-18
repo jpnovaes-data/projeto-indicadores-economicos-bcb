@@ -2,10 +2,6 @@ name: Terraform Plan
 
 on:
   pull_request:
-    paths:
-      - "terraform/**"
-      - ".github/workflows/terraform_plan.yml"
-
   workflow_dispatch:
 
 permissions:
@@ -14,6 +10,8 @@ permissions:
 jobs:
   terraform-plan:
     name: Terraform Plan
+
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     defaults:
@@ -32,6 +30,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.15.8"
+          terraform_wrapper: false
 
       - name: Terraform Format
         run: terraform fmt -check -recursive
@@ -42,12 +41,31 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform State Check
-        run: |
-          echo "Current Terraform workspace:"
-          terraform workspace show
-          echo "Resources in Terraform state:"
-          terraform state list
+      - name: Verificar acesso ao state (sem imprimir nada)
+        run: terraform state list > /dev/null
 
-      - name: Terraform Plan
-        run: terraform plan -input=false -no-color
+      - name: Terraform Plan (somente resumo)
+        run: |
+          set +e
+          terraform plan -input=false -lock=false -no-color -detailed-exitcode > plan.txt 2>&1
+          code=$?
+          set -e
+
+          if [ "$code" -eq 0 ]; then
+            echo "No changes. Infrastructure matches the configuration."
+          elif [ "$code" -eq 2 ]; then
+            grep -E "^Plan:" plan.txt || true
+            echo "::warning::O plano propoe mudancas. Revise o diff completo localmente."
+            if grep -E "^Plan:" plan.txt | grep -Eq " [1-9][0-9]* to destroy"; then
+              echo "::error::O plano destroi recursos. Bloqueado."
+              rm -f plan.txt
+              exit 1
+            fi
+          else
+            echo "::error::terraform plan falhou. Saida:"
+            cat plan.txt
+            rm -f plan.txt
+            exit 1
+          fi
+
+          rm -f plan.txt
