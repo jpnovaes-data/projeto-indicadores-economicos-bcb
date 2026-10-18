@@ -191,4 +191,5 @@ Para o Terraform, siga o [runbook](terraform/README.md). Para o deploy, cadastre
 
 ## Autor
 
-João Pedro Novaes, Analista de Dados. [LinkedIn](https://www.linkedin.com/in/joão-pedro-novaes)
+João Pedro Novaes, Analista de Dados. 
+[LinkedIn](https://www.linkedin.com/in/jpedro-novaes)
