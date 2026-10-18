@@ -10,9 +10,7 @@ A infraestrutura do banco é gerenciada como código com Terraform (projeto Neon
 
 **Dashboard ao vivo:** https://jpnovaes-data.github.io/projeto-indicadores-economicos-bcb/
 
-<!-- Depois de salvar um print em docs/dashboard.png, remova os marcadores desta linha:
 ![Dashboard](docs/dashboard.png)
--->
 
 ## Arquitetura
 
@@ -193,4 +191,5 @@ Para o Terraform, siga o [runbook](terraform/README.md). Para o deploy, cadastre
 
 ## Autor
 
-João Pedro Novaes, Analista de Dados. [LinkedIn](https://www.linkedin.com/in/joão-pedro-novaes)
+João Pedro Novaes, Analista de Dados. 
+[LinkedIn](https://www.linkedin.com/in/jpedro-novaes)
