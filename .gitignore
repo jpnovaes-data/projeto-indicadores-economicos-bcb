@@ -1,4 +1,4 @@
-# segredo - nunca commitar
+# segredos: nunca commitar
 .env
 *.tfstate
 *.tfstate.backup
@@ -12,9 +12,9 @@ override.tf.json
 tfplan
 *.tfplan
 docs/data.json
+docs/data.json.tmp
 
-
-# os dados brutos (podem ser regenerados pelo script de ingestao)
+# dados brutos (regeneráveis pelo script de ingestão)
 data/raw/*.csv
 
 # Python
@@ -22,9 +22,14 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+.pytest_cache/
+.ruff_cache/
 
-# Sistema
-.DS_Store
+# dbt
 dbt_economia/target/
 dbt_economia/logs/
-terraform/.terraform/
+dbt_economia/dbt_packages/
+dbt_economia/.user.yml
+
+# sistema
+.DS_Store

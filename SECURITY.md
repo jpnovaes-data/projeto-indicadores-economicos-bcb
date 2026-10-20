@@ -3,20 +3,41 @@
 ## Como os segredos são tratados
 
 - Credenciais, tokens e chaves de API nunca são versionados.
-- O pipeline de dados usa GitHub Secrets: `DATABASE_URL`, `DBT_HOST`, `DBT_USER`, `DBT_PASSWORD` e `DBT_DBNAME`.
+- O pipeline de dados usa **um único** GitHub Secret de banco: `DATABASE_URL`. O profile do dbt é derivado dele por `scripts/gerar_profile_dbt.py` durante a execução, então os antigos `DBT_HOST`, `DBT_USER`, `DBT_PASSWORD` e `DBT_DBNAME` **não são mais necessários** e podem ser removidos.
+- `ALERT_WEBHOOK_URL` é opcional (webhook compatível com Slack para alertas de falha).
 - A automação de infraestrutura usa `TF_API_TOKEN` (HCP Terraform) e `NEON_API_KEY_CI` (API do Neon, no plano).
-- Localmente, as credenciais ficam em `.env` e `~/.dbt/profiles.yml`, fora do Git.
+- Localmente, as credenciais ficam em `.env` e `~/.dbt/profiles.yml` (gerado com permissão 0600), fora do Git.
 - O state do Terraform fica no HCP Terraform e pode conter informações sensíveis, então o acesso ao workspace deve ser restrito.
 - O dashboard publicado lê apenas um JSON estático. O navegador não recebe credenciais nem se conecta ao banco.
-- O workflow `Terraform CI` roda sem credenciais. O `Terraform Plan` usa os secrets acima e nunca aplica mudanças.
+- O `Terraform CI` roda sem credenciais. O `Terraform Plan` usa os secrets acima, nunca aplica mudanças e **não roda para PRs do Dependabot nem de forks**.
+- **Permissões mínimas por job:** o workflow começa com `contents: read`; `pages: write` e `id-token: write` existem só no job de deploy, e `issues: write` só no job de alerta.
+- **Actions fixadas por SHA** de commit (com o número da versão em comentário). O Dependabot atualiza SHA e comentário nos PRs.
+- **Barreira local:** o hook `gitleaks` (pre-commit) bloqueia commits com segredos. Ative com `pip install -r requirements-dev.txt && pre-commit install`.
+- **Testes de integração** se recusam a rodar contra bancos cujo nome não contenha `test`.
+
+## Configurações recomendadas no GitHub (manuais)
+
+Não vivem no código, então precisam ser conferidas em **Settings** do repositório:
+
+1. **Branches, regra para `main`:** exigir pull request, exigir o check **`lint e testes`** (workflow Python CI) e bloquear force push.
+   *Os workflows de Terraform têm filtro de pasta e por isso não devem ser marcados como obrigatórios.*
+2. **Actions, General:** em *Fork pull request workflows*, exigir aprovação para contribuidores externos; em *Workflow permissions*, deixar **Read repository contents** como padrão.
+3. **Secrets:** manter só os necessários (`DATABASE_URL`, `TF_API_TOKEN`, `NEON_API_KEY_CI` e, opcionalmente, `ALERT_WEBHOOK_URL`).
+4. **Security, Code security:** ativar *Secret scanning*, *Push protection* e *Dependabot alerts*.
+5. **Notifications:** acompanhar o repositório (*Watch*) para receber por e-mail as issues `pipeline-falhou`.
+
+## Agendamento (cron)
+
+O GitHub desativa workflows agendados de repositórios públicos após 60 dias sem atividade no repositório. Se o dashboard exibir o aviso de que o pipeline não atualiza há dias, confira a aba **Actions** e reative o workflow, se preciso.
 
 ## Se um segredo vazar
 
 Considere o valor comprometido, mesmo que o arquivo seja removido depois, porque o histórico do Git o preserva. Atualizar um secret no GitHub não invalida o valor antigo: é preciso revogar ou rotacionar.
 
-1. **Senha do banco:** redefina a senha da role no Neon e atualize os secrets do GitHub, o `.env` e o `~/.dbt/profiles.yml`.
+1. **Senha do banco:** redefina a senha da role no Neon e atualize o secret `DATABASE_URL` e o `.env` (depois rode `python scripts/gerar_profile_dbt.py` para regenerar o profile).
 2. **API key do Neon:** revogue a chave, gere outra e atualize `NEON_API_KEY_CI` e os ambientes locais.
 3. **Token do HCP Terraform:** revogue o token, gere outro e atualize `TF_API_TOKEN`.
+4. **Webhook de alerta:** gere outro no serviço de destino e atualize `ALERT_WEBHOOK_URL`.
 
 Depois da rotação, rode os workflows pertinentes para confirmar que as novas credenciais funcionam.
 

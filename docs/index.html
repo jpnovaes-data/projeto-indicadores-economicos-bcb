@@ -40,6 +40,8 @@ svg.sp{width:92px;height:34px;flex:none}
 footer{margin-top:18px;color:var(--muted);font-size:.75rem;line-height:1.6}
 a{color:var(--amber)}
 @media(max-width:820px){.grid{grid-template-columns:1fr}.wide .box{height:260px}}
+.alert{display:none;margin:0 0 12px;padding:10px 12px;border:1px solid var(--amber);border-left-width:4px;border-radius:6px;background:var(--panel);color:var(--text);font-size:.85rem}
+.alert b{color:var(--amber)}
 </style>
 </head>
 <body>
@@ -51,6 +53,8 @@ a{color:var(--amber)}
     </div>
     <div class="status"><span class="dot"></span><span id="upd">Carregando...</span></div>
   </header>
+
+  <div class="alert" id="alerta" role="alert"></div>
 
   <section class="kpis" id="kpis"></section>
 
@@ -70,7 +74,7 @@ a{color:var(--amber)}
 
   <footer>
     Pipeline: API SGS, Python, Postgres (Neon), Terraform, dbt e GitHub Actions, com atualização diária às 06h (Brasília).
-    Dólar e Selic mostram a média do mês, e o mês corrente é parcial. IPCA acumulado em 12 meses por soma simples das variações mensais.
+    Dólar e Selic mostram a média do mês, e o mês corrente é parcial. IPCA acumulado em 12 meses pelo método composto, calculado quando há 12 meses consecutivos de dados.
     <a href="https://github.com/jpnovaes-data/projeto-indicadores-economicos-bcb">Código no GitHub</a>.
   </footer>
 </main>
@@ -79,13 +83,29 @@ const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim
 const fmt=(v,d=2)=>v==null?'n/d':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const lab=m=>m.slice(5)+'/'+m.slice(0,4);
 
-fetch('data.json').then(r=>r.json()).then(({updated_at,rows})=>{
+const LIMITE_DIAS={dolar:10,selic:10,ipca:80,igpm:80};
+const NOME_SERIE={dolar:'USD/BRL',selic:'Meta Selic',ipca:'IPCA',igpm:'IGP-M'};
+const br=iso=>iso.split('-').reverse().join('/');
+const dias=iso=>(Date.now()-Date.parse(iso.slice(0,10)+'T00:00:00Z'))/864e5;
+
+function avisoDesatualizado({updated_at_iso,dados_ate}){
+  const msgs=[];
+  // 1) o pipeline parou? (a página só muda quando o workflow roda)
+  if(updated_at_iso&&dias(updated_at_iso)>3)msgs.push('o pipeline não atualiza há '+Math.floor(dias(updated_at_iso))+' dias (última execução: '+br(updated_at_iso.slice(0,10))+')');
+  // 2) a fonte parou? (último dado de cada série x tolerância da periodicidade)
+  Object.entries(dados_ate||{}).forEach(([k,d])=>{if(dias(d)>LIMITE_DIAS[k])msgs.push(NOME_SERIE[k]+': último dado em '+br(d))});
+  return msgs;
+}
+
+fetch('data.json').then(r=>r.json()).then(({updated_at,updated_at_iso,dados_ate,rows})=>{
   document.getElementById('upd').textContent='Atualizado em '+updated_at;
+  const avisos=avisoDesatualizado({updated_at_iso,dados_ate});
+  if(avisos.length){const a=document.getElementById('alerta');a.innerHTML='<b>Atenção:</b> dados possivelmente desatualizados. '+avisos.join('; ')+'.';a.style.display='block'}
   const cur=updated_at.slice(6,10)+'-'+updated_at.slice(3,5);
 
   const items=[
     {k:'dolar_medio_mes',t:'USD/BRL',pre:'R$ ',suf:'',pct:true,daily:true,c:'--blue'},
-    {k:'selic_media_mes',t:'Meta Selic',pre:'',suf:'% a.a.',daily:true,c:'--violet'},
+    {k:'meta_selic_media_mes',t:'Meta Selic',pre:'',suf:'% a.a.',daily:true,c:'--violet'},
     {k:'ipca_acumulado_12m',t:'IPCA 12 meses',pre:'',suf:'%',c:'--amber'},
     {k:'igpm_variacao_mensal',t:'IGP-M no mês',pre:'',suf:'%',c:'--up'}
   ];
@@ -123,7 +143,7 @@ fetch('data.json').then(r=>r.json()).then(({updated_at,rows})=>{
     charts.forEach(c=>{c.data.labels=rs.map(r=>lab(r.mes));c.data.datasets.forEach(s=>s.data=rs.map(r=>r[s._k]));c.update('none')})};
 
   mk('c-dolar',[{l:'Média',k:'dolar_medio_mes',c:'--blue',fill:1,w:2},{l:'Máxima',k:'dolar_maximo_mes',c:'--down',dash:[3,3],w:1},{l:'Mínima',k:'dolar_minimo_mes',c:'--up',dash:[3,3],w:1}]);
-  mk('c-selic',[{l:'Meta Selic',k:'selic_media_mes',c:'--violet',fill:1,w:2}]);
+  mk('c-selic',[{l:'Meta Selic',k:'meta_selic_media_mes',c:'--violet',fill:1,w:2}]);
   mk('c-ipca',[{l:'Mensal',k:'ipca_variacao_mensal',c:'--amber',t:'bar',w:0},{l:'12 meses',k:'ipca_acumulado_12m',c:'--blue',t:'line',o:0,w:2}],'bar');
   mk('c-igpm',[{l:'IGP-M',k:'igpm_variacao_mensal',c:'--up',w:0}],'bar');
 

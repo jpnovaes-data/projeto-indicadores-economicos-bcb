@@ -1,0 +1,19 @@
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["scripts", "tests"]
+extend-exclude = ["dbt_economia/target", "dbt_economia/logs", "dbt_economia/dbt_packages"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+addopts = "-ra"
+markers = [
+    "integracao: exige um PostgreSQL de TESTE em TEST_DATABASE_URL (o nome do banco deve conter 'test')",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]  # SQL e asserts longos ficam mais legíveis numa linha só

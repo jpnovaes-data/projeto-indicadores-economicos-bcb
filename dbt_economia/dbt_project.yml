@@ -1,14 +1,22 @@
 name: 'dbt_economia'
-version: '1.0.0'
+version: '1.1.0'
 config-version: 2
 
 profile: 'dbt_economia'
 
 model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
 target-path: "target"
 clean-targets:
   - "target"
   - "dbt_packages"
+
+# Tolerâncias dos testes de frescor (em dias). Séries diárias (dólar, Selic)
+# e mensais (IPCA, IGP-M) têm ritmos de divulgação diferentes.
+vars:
+  max_atraso_diario: 10
+  max_atraso_mensal: 80
 
 models:
   dbt_economia:

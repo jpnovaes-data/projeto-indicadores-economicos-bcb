@@ -1,7 +1,7 @@
 name: Terraform CI
 
-# Verifica formatacao e validade do codigo de infraestrutura.
-# Nao usa nenhum secret e nao toca no banco: roda sem backend e sem credenciais.
+# Verifica formatação e validade do código de infraestrutura.
+# Não usa nenhum secret e não toca no banco: roda sem backend e sem credenciais.
 on:
   pull_request:
     paths:
@@ -20,23 +20,26 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: terraform
     steps:
-      - name: Checkout do repositorio
-        uses: actions/checkout@v4
+      - name: Checkout do repositório
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Instalar Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.15.8"
 
-      - name: Formatacao (terraform fmt)
+      - name: Formatação (terraform fmt)
         run: terraform fmt -check -recursive -diff
 
       - name: Inicializar sem backend e sem credenciais
         run: terraform init -backend=false -input=false
 
-      - name: Validar configuracao
+      - name: Validar configuração
         run: terraform validate
