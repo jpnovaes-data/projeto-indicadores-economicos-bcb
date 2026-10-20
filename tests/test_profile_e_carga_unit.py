@@ -42,9 +42,8 @@ def test_profile_target_dev_sem_url_dev_falha():
     with pytest.raises(ValueError):
         gp.montar_profile("postgresql://u:s@h/db", target="dev")
 
+
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows não aplica permissões POSIX (chmod)")
-
-
 def test_profile_gerado_com_permissao_restrita(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:s@h/db")
     monkeypatch.delenv("DATABASE_URL_DEV", raising=False)
