@@ -3,12 +3,18 @@ version: 2
 sources:
   - name: raw
     schema: raw
+    description: "Dados brutos da API SGS do Banco Central, carregados por scripts/load_to_neon.py."
+    config:
+      loaded_at_field: ingerido_em
+      freshness:
+        warn_after: {count: 30, period: hour}
+        error_after: {count: 54, period: hour}
     tables:
       - name: cambio_dolar
-        description: "Cotacao diaria do dolar comercial (venda), serie SGS 1."
+        description: "Cotação diária do dólar comercial (venda), série SGS 1."
       - name: ipca
-        description: "Variacao mensal do IPCA (%), serie SGS 433."
+        description: "Variação mensal do IPCA (%), série SGS 433."
       - name: selic
-        description: "Meta SELIC ao dia (%), serie SGS 432."
+        description: "Meta Selic (% ao ano), série SGS 432."
       - name: igpm
-        description: "Variacao mensal do IGP-M (%), serie SGS 189."
+        description: "Variação mensal do IGP-M (%), série SGS 189."

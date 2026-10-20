@@ -1,7 +1,7 @@
 {#
-    Consolida todos os indicadores na granularidade mensal.
-    Dolar e SELIC (diarios) sao agregados por media do mes.
-    IPCA e IGP-M ja sao mensais, entram direto.
+    Consolida os indicadores na granularidade MENSAL (1 linha por mês).
+    Dólar e Meta Selic (diários) entram como estatísticas do mês;
+    IPCA e IGP-M (mensais) entram direto.
 #}
 
 with dolar_mensal as (
@@ -17,7 +17,7 @@ with dolar_mensal as (
 selic_mensal as (
     select
         date_trunc('month', data)::date as mes,
-        avg(selic_ao_dia) as selic_media_mes
+        avg(meta_selic_aa) as meta_selic_media_mes
     from {{ ref('stg_selic') }}
     group by 1
 ),
@@ -35,19 +35,30 @@ igpm as (
         date_trunc('month', data)::date as mes,
         igpm_variacao_mensal
     from {{ ref('stg_igpm') }}
+),
+
+meses as (
+    select mes from dolar_mensal
+    union
+    select mes from selic_mensal
+    union
+    select mes from ipca
+    union
+    select mes from igpm
 )
 
 select
-    coalesce(d.mes, s.mes, i.mes, g.mes) as mes,
+    m.mes,
     d.dolar_medio_mes,
     d.dolar_minimo_mes,
     d.dolar_maximo_mes,
-    s.selic_media_mes,
+    s.meta_selic_media_mes,
     i.ipca_variacao_mensal,
     i.ipca_acumulado_12m,
     g.igpm_variacao_mensal
-from dolar_mensal d
-full outer join selic_mensal s on d.mes = s.mes
-full outer join ipca i on coalesce(d.mes, s.mes) = i.mes
-full outer join igpm g on coalesce(d.mes, s.mes, i.mes) = g.mes
-order by mes
+from meses m
+left join dolar_mensal d on d.mes = m.mes
+left join selic_mensal s on s.mes = m.mes
+left join ipca i on i.mes = m.mes
+left join igpm g on g.mes = m.mes
+order by m.mes

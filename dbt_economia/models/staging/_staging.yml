@@ -2,33 +2,54 @@ version: 2
 
 models:
   - name: stg_cambio_dolar
-    description: "Cotacao diaria do dolar, limpa e ordenada."
+    description: "Cotação diária do dólar (venda), sem nulos e ordenada."
     columns:
       - name: data
-        tests:
-          - unique
+        data_tests: [unique, not_null]
+      - name: dolar_venda
+        description: "R$ por US$."
+        data_tests:
           - not_null
+          - valor_na_faixa:
+              arguments: {min_valor: 0.5, max_valor: 15}
 
   - name: stg_ipca
-    description: "IPCA mensal, com acumulado de 12 meses calculado."
+    description: "IPCA mensal, com acumulado composto de 12 meses (nulo até haver 12 meses consecutivos)."
     columns:
       - name: data
-        tests:
-          - unique
+        data_tests: [unique, not_null, serie_mensal_continua]
+      - name: ipca_variacao_mensal
+        description: "Variação mensal (%)."
+        data_tests:
           - not_null
+          - valor_na_faixa:
+              arguments: {min_valor: -5, max_valor: 10}
+      - name: ipca_acumulado_12m
+        description: "Acumulado composto de 12 meses (%)."
+        data_tests:
+          - valor_na_faixa:
+              arguments: {min_valor: -5, max_valor: 40}
 
   - name: stg_selic
-    description: "SELIC ao dia, limpa e ordenada."
+    description: "Meta Selic diária, sem nulos e ordenada."
     columns:
       - name: data
-        tests:
-          - unique
+        data_tests: [unique, not_null]
+      - name: meta_selic_aa
+        description: "Meta Selic em % ao ano."
+        data_tests:
           - not_null
+          - valor_na_faixa:
+              arguments: {min_valor: 0, max_valor: 60}
 
   - name: stg_igpm
-    description: "IGP-M mensal, limpo e ordenado."
+    description: "IGP-M mensal, sem nulos e ordenado."
     columns:
       - name: data
-        tests:
-          - unique
+        data_tests: [unique, not_null, serie_mensal_continua]
+      - name: igpm_variacao_mensal
+        description: "Variação mensal (%)."
+        data_tests:
           - not_null
+          - valor_na_faixa:
+              arguments: {min_valor: -5, max_valor: 10}

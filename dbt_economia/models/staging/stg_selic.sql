@@ -4,7 +4,8 @@ with fonte as (
 
 select
     data,
-    valor as selic_ao_dia
+    -- série SGS 432: Meta Selic em % ao ANO (não ao dia)
+    valor as meta_selic_aa
 from fonte
 where valor is not null
 order by data

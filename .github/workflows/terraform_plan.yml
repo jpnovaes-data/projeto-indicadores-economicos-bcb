@@ -1,7 +1,12 @@
 name: Terraform Plan
 
+# Plano somente leitura contra o state remoto. Nunca aplica mudanças.
+# Roda só quando a infraestrutura muda (ou manualmente).
 on:
   pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform_plan.yml"
   workflow_dispatch:
 
 permissions:
@@ -10,9 +15,13 @@ permissions:
 jobs:
   terraform-plan:
     name: Terraform Plan
-
-    if: github.actor != 'dependabot[bot]'
+    # Sem secrets para PRs do Dependabot nem de forks.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     defaults:
       run:
@@ -24,10 +33,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.15.8"
           terraform_wrapper: false
@@ -55,14 +66,14 @@ jobs:
             echo "No changes. Infrastructure matches the configuration."
           elif [ "$code" -eq 2 ]; then
             grep -E "^Plan:" plan.txt || true
-            echo "::warning::O plano propoe mudancas. Revise o diff completo localmente."
+            echo "::warning::O plano propõe mudanças. Revise o diff completo localmente."
             if grep -E "^Plan:" plan.txt | grep -Eq " [1-9][0-9]* to destroy"; then
-              echo "::error::O plano destroi recursos. Bloqueado."
+              echo "::error::O plano destrói recursos. Bloqueado."
               rm -f plan.txt
               exit 1
             fi
           else
-            echo "::error::terraform plan falhou. Saida:"
+            echo "::error::terraform plan falhou. Saída:"
             cat plan.txt
             rm -f plan.txt
             exit 1

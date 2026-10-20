@@ -3,11 +3,43 @@ version: 2
 models:
   - name: fato_indicadores_economicos
     description: >
-      Tabela final, granularidade mensal, pronta para consumo no Power BI.
-      Combina cambio, SELIC, IPCA e IGP-M em uma unica linha por mes.
+      Tabela final, granularidade mensal (1 linha por mês). Combina câmbio,
+      Meta Selic, IPCA e IGP-M. Alimenta o dashboard e pode ser consumida
+      por qualquer ferramenta de BI.
     columns:
       - name: mes
-        description: "Primeiro dia do mes de referencia."
-        tests:
-          - unique
-          - not_null
+        description: "Primeiro dia do mês de referência."
+        data_tests: [unique, not_null]
+      - name: dolar_medio_mes
+        description: "Média das cotações de venda no mês (R$/US$). O mês corrente é parcial."
+        data_tests:
+          - valor_na_faixa:
+              arguments: {min_valor: 0.5, max_valor: 15}
+      - name: dolar_minimo_mes
+        data_tests:
+          - valor_na_faixa:
+              arguments: {min_valor: 0.5, max_valor: 15}
+      - name: dolar_maximo_mes
+        data_tests:
+          - valor_na_faixa:
+              arguments: {min_valor: 0.5, max_valor: 15}
+      - name: meta_selic_media_mes
+        description: "Média da Meta Selic no mês, em % ao ano."
+        data_tests:
+          - valor_na_faixa:
+              arguments: {min_valor: 0, max_valor: 60}
+      - name: ipca_variacao_mensal
+        description: "Variação mensal do IPCA (%)."
+        data_tests:
+          - valor_na_faixa:
+              arguments: {min_valor: -5, max_valor: 10}
+      - name: ipca_acumulado_12m
+        description: "IPCA acumulado composto em 12 meses (%); nulo até haver 12 meses consecutivos."
+        data_tests:
+          - valor_na_faixa:
+              arguments: {min_valor: -5, max_valor: 40}
+      - name: igpm_variacao_mensal
+        description: "Variação mensal do IGP-M (%)."
+        data_tests:
+          - valor_na_faixa:
+              arguments: {min_valor: -5, max_valor: 10}

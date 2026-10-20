@@ -1,0 +1,4 @@
+# Normaliza finais de linha (o projeto é desenvolvido no Windows e roda em Linux no CI).
+* text=auto eol=lf
+*.png binary
+*.exe binary

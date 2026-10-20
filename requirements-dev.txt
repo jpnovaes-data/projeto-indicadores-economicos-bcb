@@ -1,0 +1,5 @@
+# Ferramentas de desenvolvimento: lint, testes e hooks de pre-commit.
+-r requirements.txt
+pytest==9.1.1
+ruff==0.17.1
+pre-commit==4.7.0

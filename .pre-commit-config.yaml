@@ -1,0 +1,27 @@
+# Instalação (uma vez por clone):  pip install -r requirements-dev.txt && pre-commit install
+# Rodar em tudo:                   pre-commit run --all-files
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks          # bloqueia commit que contenha segredo (senha, token, chave)
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+        exclude: ^dbt_economia/profiles\.yml\.example$
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: end-of-file-fixer
+        exclude: ^docs/dashboard\.png$
+      - id: trailing-whitespace
+      - id: detect-private-key

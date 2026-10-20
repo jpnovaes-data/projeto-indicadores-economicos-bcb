@@ -1,14 +1,23 @@
-# Abre PRs semanais para atualizar dependencias com correcoes de seguranca.
+# PRs semanais de atualização. Atualizações minor/patch vêm agrupadas (menos ruído);
+# majors continuam em PRs separados para revisão individual.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      python-minor-patch:
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: "terraform"
     directory: "/terraform"
     schedule:

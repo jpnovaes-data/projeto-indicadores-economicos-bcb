@@ -1,18 +1,30 @@
-# Este arquivo NAO vai para o Git. Ele fica em ~/.dbt/profiles.yml no seu PC
-# (fora da pasta do projeto), que e o local padrao onde o dbt procura por ele.
+# Este arquivo NÃO vai para o Git. Fica em ~/.dbt/profiles.yml (fora do projeto).
+#   Windows: C:\Users\SEU_USUARIO\.dbt\profiles.yml
 #
-# No Windows, o caminho normalmente e:
-#   C:\Users\SEU_USUARIO\.dbt\profiles.yml
+# Jeito mais simples: gerar o profile a partir do .env, sem copiar senha à mão:
+#     python scripts/gerar_profile_dbt.py
 #
-# Preencha host, user, password e dbname com os dados da sua connection
-# string do Neon (a mesma usada no .env).
+# Ambientes:
+#   dev  -> branch de desenvolvimento do Neon (DATABASE_URL_DEV), para testar
+#           mudanças sem tocar na produção. Branches do Neon são gratuitas.
+#   prod -> banco de produção (DATABASE_URL).
 
 dbt_economia:
   target: dev
   outputs:
     dev:
       type: postgres
-      host: SEU_HOST_NEON.neon.tech
+      host: SEU_HOST_DEV.neon.tech
+      user: SEU_USUARIO
+      password: SUA_SENHA
+      port: 5432
+      dbname: neondb
+      schema: raw
+      sslmode: require
+      threads: 4
+    prod:
+      type: postgres
+      host: SEU_HOST_PROD.neon.tech
       user: SEU_USUARIO
       password: SUA_SENHA
       port: 5432
