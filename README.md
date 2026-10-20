@@ -64,7 +64,7 @@ A API limita séries diárias a janelas de 10 anos, então a ingestão busca os 
 
 ## Como o pipeline funciona
 
-1. **Ingestão** (`scripts/ingest_bcb.py`): consulta as 4 séries, trata tipos e datas e salva em CSV, com 3 tentativas e espera crescente. Tenta todas as séries, mas **termina com erro se qualquer uma falhar**, para o workflow nunca ficar "verde" com dados velhos.
+1. **Ingestão** (`scripts/ingest_bcb.py`): consulta as 4 séries, trata tipos e datas e salva em CSV, com até 4 tentativas e espera crescente (5, 10 e 20 s). As tentativas cobrem também respostas ruins da API, como HTTP 200 com corpo vazio ou HTML. Tenta todas as séries, mas **termina com erro se qualquer uma falhar**, para o workflow nunca ficar "verde" com dados velhos.
 2. **Validação** (`scripts/validacao.py`): antes de tocar o banco, confere existência dos arquivos, número mínimo de linhas, datas únicas, faixa plausível dos valores e idade do último dado. Se reprovar, a carga é abortada e o banco permanece como estava.
 3. **Carga** (`scripts/load_to_neon.py`): *upsert* (`INSERT ... ON CONFLICT`) em **uma transação por série**. Nunca esvazia a tabela: se algo falhar no meio, o rollback preserva os dados anteriores. Rodar duas vezes não duplica nada, e a coluna `ingerido_em` registra quando cada linha foi gravada.
 4. **Transformação** (`dbt_economia/`): 4 views em `staging` e a tabela `marts.fato_indicadores_economicos`.
@@ -196,7 +196,7 @@ Crie uma **branch** no Neon (gratuito), defina `DATABASE_URL_DEV` no `.env` e ro
 
 ```bash
 make lint                      # ruff
-make test                      # 34 testes unitários, sem banco
+make test                      # 40 testes unitários, sem banco
 # integração: exige um banco DESCARTÁVEL cujo nome contenha "test"
 export TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/economia_test?sslmode=disable
 make test-integracao           # 10 testes: carga, migração, rollback, dbt e export
