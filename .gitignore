@@ -30,6 +30,8 @@ dbt_economia/target/
 dbt_economia/logs/
 dbt_economia/dbt_packages/
 dbt_economia/.user.yml
+logs/
+target/
 
 # sistema
 .DS_Store
