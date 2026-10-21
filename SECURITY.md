@@ -19,8 +19,8 @@
 
 Não vivem no código, então precisam ser conferidas em **Settings** do repositório:
 
-1. **Branches, regra para `main`:** exigir pull request, exigir o check **`lint e testes`** (workflow Python CI) e bloquear force push.
-   *Os workflows de Terraform têm filtro de pasta e por isso não devem ser marcados como obrigatórios.*
+1. **Branches, regra para `main`:** exigir pull request, exigir os checks **`lint e testes`** (workflow Python CI) e **`Terraform Plan`**, e bloquear force push.
+   *O `Terraform Plan` roda em todo PR e sempre reporta status (sem mudanças em `terraform/`, termina em segundos), então pode ser obrigatório sem travar PRs. Já o `Terraform CI` tem filtro de pasta e não deve ser marcado como obrigatório: nos PRs que não tocam em `terraform/` ele nunca roda, e o PR ficaria preso em "Expected - Waiting for status to be reported".*
 2. **Actions, General:** em *Fork pull request workflows*, exigir aprovação para contribuidores externos; em *Workflow permissions*, deixar **Read repository contents** como padrão.
 3. **Secrets:** manter só os necessários (`DATABASE_URL`, `TF_API_TOKEN`, `NEON_API_KEY_CI` e, opcionalmente, `ALERT_WEBHOOK_URL`).
 4. **Security, Code security:** ativar *Secret scanning*, *Push protection* e *Dependabot alerts*.

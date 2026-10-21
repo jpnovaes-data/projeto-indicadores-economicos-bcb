@@ -118,7 +118,7 @@ O projeto Neon foi criado pelo console e depois **importado** para o Terraform. 
 | `pipeline_diario.yml` | Diário às 06h (Brasília) e manual | Ingestão, validação, carga, dbt (freshness, run, test), exportação, deploy e alerta de falha |
 | `ci_python.yml` | Todo pull request e push na `main` | `ruff` e `pytest` (unitários + integração com Postgres e dbt em container) |
 | `terraform_ci.yml` | Mudanças em `terraform/` | `fmt -check`, `init -backend=false` e `validate`, sem credenciais |
-| `terraform_plan.yml` | Pull requests em `terraform/` e manual | Plano contra o state remoto, somente leitura; não roda para Dependabot nem forks |
+| `terraform_plan.yml` | Todo pull request e manual | Detecta se `terraform/` mudou: se sim, faz o plano contra o state remoto (somente leitura); se não, termina em segundos sem usar secrets. Sempre reporta status, então pode ser check obrigatório. Pulado para Dependabot e forks |
 
 Boas práticas aplicadas: **actions fixadas por SHA** do commit (o Dependabot mantém atualizado), **permissões mínimas** por job (`pages: write` só no deploy, `issues: write` só no alerta), `persist-credentials: false`, `timeout-minutes` em todos os jobs e **um único secret de banco** (`DATABASE_URL`; o profile do dbt é derivado dele). Nenhum workflow aplica mudanças na infraestrutura.
 
