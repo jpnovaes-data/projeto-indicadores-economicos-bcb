@@ -36,7 +36,10 @@ SERIES = {
 # Usamos 9,5 anos para ficar com margem de segurança.
 ANOS_HISTORICO = 9.5
 
-TENTATIVAS = 3
+TENTATIVAS = 4
+ESPERA_BASE = 5  # segundos; dobra a cada nova tentativa (5, 10, 20)
+PAUSA_ENTRE_SERIES = 1  # gentileza com a API, que oscila sob requisições em sequência
+HEADERS = {"Accept": "application/json", "User-Agent": "projeto-indicadores-economicos-bcb"}
 OUTPUT_DIR = Path(__file__).parent.parent / "data" / "raw"
 
 log = logging.getLogger("ingest_bcb")
@@ -56,22 +59,37 @@ def buscar_serie(nome: str, codigo: int, sessao: requests.Session | None = None)
     url = BASE_URL.format(codigo=codigo)
     log.info("Buscando série '%s' (código %s)...", nome, codigo)
 
-    resposta = None
     for tentativa in range(1, TENTATIVAS + 1):
+        resposta = None
         try:
-            resposta = sessao.get(url, params=params, timeout=60)
+            resposta = sessao.get(url, params=params, headers=HEADERS, timeout=60)
             resposta.raise_for_status()
-            break
-        except requests.exceptions.RequestException as erro:
+            # A leitura do JSON FICA DENTRO do laço: a API do BCB às vezes responde 200
+            # com corpo vazio ou HTML. requests.JSONDecodeError e a validação em
+            # normalizar() são ValueError, então essas respostas também são repetidas.
+            return normalizar(resposta.json(), nome)
+        except (requests.exceptions.RequestException, ValueError) as erro:
             if tentativa == TENTATIVAS:
                 raise
-            espera = 5 * tentativa
+            espera = ESPERA_BASE * 2 ** (tentativa - 1)
             log.warning(
-                "  tentativa %d falhou (%s); nova tentativa em %ds", tentativa, erro, espera
+                "  tentativa %d/%d falhou (%s)%s; nova tentativa em %ds",
+                tentativa,
+                TENTATIVAS,
+                erro,
+                _detalhe(resposta),
+                espera,
             )
             time.sleep(espera)
+    raise AssertionError("inalcançável")  # pragma: no cover
 
-    return normalizar(resposta.json(), nome)
+
+def _detalhe(resposta) -> str:
+    """Resumo da resposta recebida (status e início do corpo), útil para diagnosticar."""
+    if resposta is None:
+        return ""
+    corpo = (getattr(resposta, "text", "") or "").strip().replace("\n", " ")[:120]
+    return f" [HTTP {getattr(resposta, 'status_code', '?')}, corpo: {corpo!r}]"
 
 
 def normalizar(dados: list[dict], nome: str) -> pd.DataFrame:
@@ -106,7 +124,9 @@ def main() -> int:
 
     falhas: list[str] = []
     with requests.Session() as sessao:
-        for nome, codigo in SERIES.items():
+        for i, (nome, codigo) in enumerate(SERIES.items()):
+            if i:
+                time.sleep(PAUSA_ENTRE_SERIES)
             try:
                 salvar_csv(buscar_serie(nome, codigo, sessao), nome)
             except (requests.exceptions.RequestException, ValueError) as erro:

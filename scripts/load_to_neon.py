@@ -21,13 +21,18 @@ from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import Column, DateTime, Float, MetaData, Table, Text, create_engine, func, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Connection, Engine
 
 from validacao import ErroValidacao, validar_diretorio
 
 RAW_DIR = Path(__file__).parent.parent / "data" / "raw"
 SERIES = ["cambio_dolar", "ipca", "selic", "igpm"]
+
+# Linhas por comando INSERT. Cada comando é UMA ida e volta à rede: com o banco longe do
+# runner (GitHub nos EUA, Neon em São Paulo), enviar linha a linha leva minutos.
+LOTE = 1000
 
 log = logging.getLogger("load_to_neon")
 
@@ -92,6 +97,40 @@ def _registros(df: pd.DataFrame) -> list[dict]:
     return registros
 
 
+def _tabela(nome: str) -> Table:
+    """Descrição da tabela raw.<nome> para o SQLAlchemy montar o INSERT em lotes."""
+    _checar_nome(nome)
+    return Table(
+        nome,
+        MetaData(),
+        Column("data", DateTime),
+        Column("valor", Float),
+        Column("serie", Text),
+        Column("ingerido_em", DateTime(timezone=True)),
+        schema="raw",
+    )
+
+
+def _upsert_em_lotes(conn: Connection, nome: str, registros: list[dict]) -> None:
+    """INSERT ... ON CONFLICT em comandos de várias linhas (LOTE por comando).
+
+    ~3.500 linhas viram 4 comandos em vez de 3.500. `ingerido_em` usa o DEFAULT now()
+    da tabela nos inserts e é atualizado explicitamente nos conflitos.
+    """
+    tabela = _tabela(nome)
+    for i in range(0, len(registros), LOTE):
+        comando = pg_insert(tabela).values(registros[i : i + LOTE])
+        comando = comando.on_conflict_do_update(
+            index_elements=[tabela.c.data],
+            set_={
+                "valor": comando.excluded.valor,
+                "serie": comando.excluded.serie,
+                "ingerido_em": func.now(),
+            },
+        )
+        conn.execute(comando)
+
+
 def carregar_serie(engine: Engine, nome: str, diretorio: Path = RAW_DIR) -> int:
     """Faz o upsert de uma série. Levanta exceção se o CSV não existir."""
     _checar_nome(nome)
@@ -100,27 +139,19 @@ def carregar_serie(engine: Engine, nome: str, diretorio: Path = RAW_DIR) -> int:
         raise FileNotFoundError(f"{caminho} não encontrado (rode a ingestão primeiro)")
 
     df = pd.read_csv(caminho, parse_dates=["data"])
+    # Duas linhas com a mesma data no MESMO comando quebrariam o ON CONFLICT; fica a última.
+    df = df.drop_duplicates(subset="data", keep="last")
     registros = _registros(df)
 
     with engine.begin() as conn:  # uma transação: tudo ou nada
         garantir_tabela(conn, nome)
-        conn.execute(
-            text(f"""
-                INSERT INTO raw.{nome} (data, valor, serie, ingerido_em)
-                VALUES (:data, :valor, :serie, now())
-                ON CONFLICT (data) DO UPDATE
-                   SET valor = EXCLUDED.valor,
-                       serie = EXCLUDED.serie,
-                       ingerido_em = now()
-            """),
-            registros,
-        )
+        _upsert_em_lotes(conn, nome, registros)
         total = conn.execute(text(f"SELECT count(*) FROM raw.{nome}")).scalar_one()
-        if total < len(df):  # o banco jamais deve ficar com MENOS que o CSV
-            raise RuntimeError(f"raw.{nome} ficou com {total} linhas, CSV tem {len(df)}")
+        if total < len(registros):  # o banco jamais deve ficar com MENOS que o CSV
+            raise RuntimeError(f"raw.{nome} ficou com {total} linhas, CSV tem {len(registros)}")
 
-    log.info("  -> '%s': %d registros do CSV (tabela agora com %d)", nome, len(df), total)
-    return len(df)
+    log.info("  -> '%s': %d registros do CSV (tabela agora com %d)", nome, len(registros), total)
+    return len(registros)
 
 
 def main(argv: list[str] | None = None) -> int:
