@@ -2,7 +2,7 @@
 
 import pandas as pd
 import pytest
-from sqlalchemy import text
+from sqlalchemy import event, text
 
 import load_to_neon as ld
 from conftest import escrever_csvs
@@ -103,3 +103,40 @@ def test_main_aborta_sem_tocar_no_banco_quando_a_validacao_falha(
     )
     monkeypatch.setattr(ld, "conectar", lambda: pytest.fail("não deveria conectar ao banco"))
     assert ld.main([]) == 1
+
+
+def test_upsert_envia_poucos_comandos_insert_e_nenhum_executemany(
+    engine_teste, series, tmp_path, monkeypatch
+):
+    """Regressão de desempenho: cada comando é uma ida e volta à rede.
+
+    Com o banco longe do runner, um INSERT por linha levou minutos em produção.
+    """
+    monkeypatch.setattr(ld, "LOTE", 300)
+    escrever_csvs(tmp_path, series)
+    comandos = []
+
+    def contar(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("INSERT"):
+            comandos.append(executemany)
+
+    event.listen(engine_teste, "before_cursor_execute", contar)
+    ld.carregar_serie(engine_teste, "cambio_dolar", tmp_path)  # 700 linhas / lote de 300
+
+    assert len(comandos) == 3  # ceil(700 / 300)
+    assert not any(comandos)  # nenhum executemany (que enviaria uma linha por vez)
+
+
+def test_datas_repetidas_no_csv_nao_quebram_o_upsert(engine_teste, series, tmp_path):
+    df = series["ipca"]
+    repetida = df.iloc[[3]].assign(valor=9.9)
+    escrever_csvs(tmp_path, {"ipca": pd.concat([df, repetida], ignore_index=True)})
+
+    ld.carregar_serie(engine_teste, "ipca", tmp_path)
+
+    (total,) = _q(engine_teste, "select count(*) from raw.ipca")[0]
+    assert total == len(df)
+    (valor,) = _q(engine_teste, f"select valor from raw.ipca where data = '{df.iloc[3]['data']}'")[
+        0
+    ]
+    assert valor == 9.9  # vale a última ocorrência
