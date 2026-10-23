@@ -40,6 +40,10 @@ def test_pipeline_completo_passa_e_ipca_acumulado_e_composto(banco_carregado, ur
         text("select * from marts.fato_indicadores_economicos order by mes"), banco_carregado
     )
     ipca = mart.dropna(subset=["ipca_variacao_mensal"]).reset_index(drop=True)
+    # Sem estas duas linhas, um IPCA 100% nulo deixava `ipca` vazio e a comparação abaixo
+    # (vazio contra vazio) passava sem verificar nada.
+    assert len(ipca) > 12, "o mart não tem IPCA suficiente para validar o acumulado"
+    assert ipca["ipca_acumulado_12m"].iloc[11:].notna().all()
 
     # oráculo independente (pandas/numpy): produto móvel de 12 meses
     esperado = (
@@ -84,3 +88,44 @@ def test_dbt_test_reprova_quando_o_dolar_esta_parado(banco_carregado, url_teste,
     assert _dbt("run", url=url_teste, pasta=tmp_path)[0].returncode == 0
     r, saida = _dbt("test", url=url_teste, pasta=tmp_path)
     assert r.returncode != 0 and "frescor_dados" in saida
+
+
+COLUNAS_QUE_NAO_PODEM_FICAR_NULAS = [
+    "ipca_variacao_mensal",
+    "ipca_acumulado_12m",
+    "meta_selic_media_mes",
+]
+
+
+def _anular_coluna_do_mart(engine, coluna):
+    with engine.begin() as conn:
+        conn.execute(text(f"update marts.fato_indicadores_economicos set {coluna} = null"))
+
+
+@pytest.mark.parametrize("coluna", COLUNAS_QUE_NAO_PODEM_FICAR_NULAS)
+def test_dbt_test_reprova_quando_um_indicador_fica_100_por_cento_nulo_no_mart(
+    banco_carregado, url_teste, tmp_path, coluna
+):
+    """Regressão: com o IPCA 100% nulo no mart, os 35 testes dbt (e o pytest) passavam."""
+    assert _dbt("run", url=url_teste, pasta=tmp_path)[0].returncode == 0
+    _anular_coluna_do_mart(banco_carregado, coluna)  # `dbt test` não reconstrói a tabela
+
+    r, saida = _dbt("test", url=url_teste, pasta=tmp_path)
+
+    assert r.returncode != 0
+    assert "mart_preenche_todos_os_indicadores" in saida
+
+
+def test_export_recusa_publicar_quando_um_indicador_fica_nulo_no_mart(
+    banco_carregado, url_teste, tmp_path, monkeypatch
+):
+    assert _dbt("run", url=url_teste, pasta=tmp_path)[0].returncode == 0
+    _anular_coluna_do_mart(banco_carregado, "ipca_variacao_mensal")
+    saida = tmp_path / "data.json"
+    monkeypatch.setattr(exp, "SAIDA", saida)
+    monkeypatch.setenv("DATABASE_URL", url_teste)
+
+    with pytest.raises(RuntimeError, match="ipca_variacao_mensal: nenhum valor no mart"):
+        exp.main()
+
+    assert not saida.exists()  # nada é publicado

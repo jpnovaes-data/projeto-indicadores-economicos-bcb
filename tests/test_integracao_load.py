@@ -140,3 +140,28 @@ def test_datas_repetidas_no_csv_nao_quebram_o_upsert(engine_teste, series, tmp_p
         0
     ]
     assert valor == 9.9  # vale a última ocorrência
+
+
+def test_migracao_recusa_tabela_legada_com_datas_duplicadas_sem_alterar_nada(
+    engine_teste, series, tmp_path
+):
+    legada = pd.concat([series["ipca"], series["ipca"].iloc[[3, 4]]], ignore_index=True)
+    legada.to_sql("ipca", engine_teste, schema="raw", index=False)
+    antes = _q(engine_teste, "select data, valor from raw.ipca order by data, valor")
+    escrever_csvs(tmp_path, series)
+
+    with pytest.raises(RuntimeError, match="datas duplicadas"):
+        ld.carregar_serie(engine_teste, "ipca", tmp_path)
+
+    # a mensagem aponta as datas, e nada mudou: dados iguais, sem coluna nova, sem índice
+    assert _q(engine_teste, "select data, valor from raw.ipca order by data, valor") == antes
+    colunas = {
+        r[0]
+        for r in _q(
+            engine_teste,
+            "select column_name from information_schema.columns "
+            "where table_schema='raw' and table_name='ipca'",
+        )
+    }
+    assert "ingerido_em" not in colunas
+    assert not _q(engine_teste, "select 1 from pg_indexes where indexname='ux_ipca_data'")

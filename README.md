@@ -65,11 +65,11 @@ A API limita séries diárias a janelas de 10 anos, então a ingestão busca os 
 ## Como o pipeline funciona
 
 1. **Ingestão** (`scripts/ingest_bcb.py`): consulta as 4 séries, trata tipos e datas e salva em CSV, com até 4 tentativas e espera crescente (5, 10 e 20 s). As tentativas cobrem também respostas ruins da API, como HTTP 200 com corpo vazio ou HTML. Tenta todas as séries, mas **termina com erro se qualquer uma falhar**, para o workflow nunca ficar "verde" com dados velhos.
-2. **Validação** (`scripts/validacao.py`): antes de tocar o banco, confere existência dos arquivos, número mínimo de linhas, datas únicas, faixa plausível dos valores e idade do último dado. Se reprovar, a carga é abortada e o banco permanece como estava.
+2. **Validação** (`scripts/validacao.py`): antes de tocar o banco, confere se cada arquivo é legível, número mínimo de linhas, datas válidas e únicas, **nenhum valor nulo ou não numérico**, faixa plausível dos valores, rótulo da coluna `serie` e idade do último dado. Se reprovar, a carga é abortada e o banco permanece como estava.
 3. **Carga** (`scripts/load_to_neon.py`): *upsert* (`INSERT ... ON CONFLICT`) em **uma transação por série**, enviado em lotes de 1.000 linhas (poucas idas e voltas à rede, já que o runner fica longe do banco). Nunca esvazia a tabela: se algo falhar no meio, o rollback preserva os dados anteriores. Rodar duas vezes não duplica nada, e a coluna `ingerido_em` registra quando cada linha foi gravada.
 4. **Transformação** (`dbt_economia/`): 4 views em `staging` e a tabela `marts.fato_indicadores_economicos`.
-5. **Qualidade**: `dbt source freshness` e **35 testes dbt** (32 de dados e 3 unitários), descritos abaixo. Se algum falhar, o workflow falha e o dashboard não é republicado.
-6. **Exportação** (`scripts/export_dashboard_data.py`): gera `docs/data.json` com as linhas mensais e metadados (data do último dado de cada série).
+5. **Qualidade**: `dbt source freshness` e **37 testes dbt** (34 de dados e 3 unitários), descritos abaixo. Se algum falhar, o workflow falha e o dashboard não é republicado.
+6. **Exportação** (`scripts/export_dashboard_data.py`): gera `docs/data.json` com as linhas mensais e metadados (data do último dado de cada série). **Recusa gerar o arquivo** se algum indicador estiver sem valores ou atrás da data do último dado da sua série, e o dashboard não é publicado.
 7. **Publicação**: o job de deploy envia `docs/` ao GitHub Pages, somente se o job anterior passar.
 8. **Alerta**: se o pipeline ou o deploy falharem, um job abre (ou comenta em) uma issue com o rótulo `pipeline-falhou`; opcionalmente também chama um webhook compatível com Slack.
 
@@ -94,7 +94,8 @@ Dólar e Meta Selic (diários) viram média, mínimo e máximo do mês (a Selic,
 | `serie_mensal_continua` (genérico) | IPCA e IGP-M sem mês faltando |
 | `frescor_dados` | último dado de cada série dentro da tolerância (10 dias para diárias, 80 para mensais) |
 | `meses_continuos_no_mart` | tabela fato sem buracos entre meses |
-| `mart_cobre_todas_as_series` | o mês mais recente de cada série chega ao mart |
+| `mart_preenche_todos_os_indicadores` | todo mês com dado de um indicador no staging está **preenchido** no mart (um indicador 100% nulo falha) |
+| `serie_diaria_sem_buracos` (genérico) | dólar sem intervalo maior que 7 dias (só dias úteis; o maior real foi 5) e Selic sem nenhum dia faltando |
 | `dolar_minimo_medio_maximo` | mínimo ≤ média ≤ máximo |
 | **testes unitários dbt** | IPCA composto (12 × 1,00% = 12,6825%, e não 12%), acumulado nulo quando há buraco, renomeação da Selic |
 | `source freshness` | a carga rodou nas últimas horas (`ingerido_em`) |
@@ -151,6 +152,7 @@ A camada `marts` continua pronta para ser consumida por Power BI ou outra ferram
 - **De `DROP` a `TRUNCATE` a `UPSERT`:** o `if_exists="replace"` do pandas derrubava as tabelas e o Postgres bloqueava, porque as views do dbt dependem delas. O `TRUNCATE` corrigiu isso, mas rodava em transação separada da inserção: uma falha no meio deixava a tabela **vazia**. O upsert numa única transação elimina esse risco (há teste de integração que injeta o erro e confere o rollback).
 - **Falhar alto em vez de publicar dados velhos:** ingestão e carga agora saem com erro, e o dashboard avisa sozinho quando os dados envelhecem.
 - **Um teste só vale se detecta o problema:** ao injetar falhas de propósito, descobri que um mês faltando no IPCA passava despercebido (o mart junta as 4 séries, então o mês continuava existindo graças ao dólar). Isso gerou o teste `serie_mensal_continua`.
+- **Teste que não pode falhar é pior que nenhum:** uma auditoria externa apontou que meu teste do mart era verdadeiro por construção. Comprovei quebrando o mart de propósito: com o IPCA 100% nulo, os 35 testes dbt e o teste de integração passavam. Troquei por um teste que compara cada indicador do mart com o staging e refiz a quebra: agora falha. Também havia uma comparação que passava com os dois lados vazios, e agora ela exige dados antes de comparar.
 - **Regra de negócio no dbt, não no script de exportação:** o acumulado de 12 meses era "mascarado" no Python; agora vem pronto e testado do modelo.
 - **Importar, não recriar:** preserva os dados e evita destruir o banco.
 - **State remoto e proteção contra destruição:** reduzem o risco de perder o controle do recurso ou apagá-lo por engano.
@@ -196,10 +198,10 @@ Crie uma **branch** no Neon (gratuito), defina `DATABASE_URL_DEV` no `.env` e ro
 
 ```bash
 make lint                      # ruff
-make test                      # 40 testes unitários, sem banco
+make test                      # 58 testes unitários, sem banco
 # integração: exige um banco DESCARTÁVEL cujo nome contenha "test"
 export TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/economia_test?sslmode=disable
-make test-integracao           # 12 testes: carga, migração, rollback, desempenho, dbt e export
+make test-integracao           # 17 testes: carga, migração, rollback, desempenho, dbt e export
 ```
 
 Os testes de integração se recusam a rodar contra qualquer banco cujo nome não contenha `test`, pois eles recriam os schemas. Para ativar os hooks locais: `pre-commit install`.
