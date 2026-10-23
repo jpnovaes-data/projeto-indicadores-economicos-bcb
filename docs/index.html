@@ -97,7 +97,7 @@ function avisoDesatualizado({updated_at_iso,dados_ate}){
   return msgs;
 }
 
-fetch('data.json').then(r=>r.json()).then(({updated_at,updated_at_iso,dados_ate,rows})=>{
+function renderizar({updated_at,updated_at_iso,dados_ate,rows}){
   document.getElementById('upd').textContent='Atualizado em '+updated_at;
   const avisos=avisoDesatualizado({updated_at_iso,dados_ate});
   if(avisos.length){const a=document.getElementById('alerta');a.innerHTML='<b>Atenção:</b> dados possivelmente desatualizados. '+avisos.join('; ')+'.';a.style.display='block'}
@@ -151,7 +151,16 @@ fetch('data.json').then(r=>r.json()).then(({updated_at,updated_at_iso,dados_ate,
     document.querySelectorAll('#seg button').forEach(x=>x.classList.remove('on'));
     b.classList.add('on');apply(+b.dataset.n)});
   apply(60);
-}).catch(()=>{document.getElementById('upd').textContent='Falha ao carregar data.json'});
+}
+
+// Dois erros diferentes, duas mensagens: falha ao BAIXAR/LER o JSON x falha ao EXIBIR dados já lidos.
+const msg=t=>{document.getElementById('upd').textContent=t};
+fetch('data.json')
+  .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})
+  .then(dados=>{
+    try{renderizar(dados)}
+    catch(e){console.error(e);msg('Falha ao exibir os dados: '+e.message)}
+  },()=>msg('Falha ao carregar data.json'));
 </script>
 </body>
 </html>

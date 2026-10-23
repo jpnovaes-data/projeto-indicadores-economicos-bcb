@@ -29,6 +29,17 @@ ULTIMA_DATA = {
     "igpm": "staging.stg_igpm",
 }
 
+# Colunas que vêm direto de cada série. O último mês com valor em cada uma precisa ser o mês
+# do último dado da série (`dados_ate`); senão o indicador sumiu no caminho até o mart.
+# `ipca_acumulado_12m` fica de fora: é nulo por desenho nos 11 primeiros meses e após buracos,
+# e quem o valida é o teste do dbt `mart_preenche_todos_os_indicadores`.
+INDICADORES_POR_SERIE = {
+    "dolar": ["dolar_medio_mes", "dolar_minimo_mes", "dolar_maximo_mes"],
+    "selic": ["meta_selic_media_mes"],
+    "ipca": ["ipca_variacao_mensal"],
+    "igpm": ["igpm_variacao_mensal"],
+}
+
 COLUNAS = [
     "mes",
     "dolar_medio_mes",
@@ -41,6 +52,30 @@ COLUNAS = [
 ]
 
 
+def _validar_indicadores(df: pd.DataFrame, ultimas_datas: dict[str, str]) -> None:
+    """Recusa publicar se algum indicador estiver vazio ou defasado em relação à sua série."""
+    problemas: list[str] = []
+    for serie, colunas in INDICADORES_POR_SERIE.items():
+        if serie not in ultimas_datas:
+            problemas.append(f"'dados_ate' sem a série '{serie}'")
+            continue
+        esperado = ultimas_datas[serie][:7]  # AAAA-MM do último dado da série
+        for coluna in colunas:
+            com_valor = df.loc[df[coluna].notna(), "mes"]
+            if com_valor.empty:
+                problemas.append(f"{coluna}: nenhum valor no mart (série '{serie}')")
+            elif com_valor.iloc[-1] != esperado:
+                problemas.append(
+                    f"{coluna}: último mês com valor é {com_valor.iloc[-1]}, "
+                    f"mas a série '{serie}' tem dado até {esperado}"
+                )
+    if problemas:
+        raise RuntimeError(
+            "Indicadores inconsistentes; docs/data.json NÃO foi gerado:\n  - "
+            + "\n  - ".join(problemas)
+        )
+
+
 def montar_payload(df: pd.DataFrame, ultimas_datas: dict[str, str], agora: datetime) -> dict:
     """Monta o JSON do dashboard (função pura, testável sem banco)."""
     faltando = [c for c in COLUNAS if c not in df.columns]
@@ -51,6 +86,8 @@ def montar_payload(df: pd.DataFrame, ultimas_datas: dict[str, str], agora: datet
 
     df = df[COLUNAS].copy()
     df["mes"] = pd.to_datetime(df["mes"]).dt.strftime("%Y-%m")
+    df = df.sort_values("mes").reset_index(drop=True)
+    _validar_indicadores(df, ultimas_datas)
     df = df.round(4)
 
     return {

@@ -80,7 +80,35 @@ def garantir_tabela(conn: Connection, nome: str) -> None:
             f"ALTER TABLE raw.{nome} ADD COLUMN IF NOT EXISTS ingerido_em TIMESTAMPTZ DEFAULT now()"
         )
     )
+    _checar_duplicatas_antes_do_indice(conn, nome)
     conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS ux_{nome}_data ON raw.{nome} (data)"))
+
+
+def _checar_duplicatas_antes_do_indice(conn: Connection, nome: str) -> None:
+    """Recusa a migração, com mensagem clara, se a tabela antiga tem datas duplicadas.
+
+    Sem isso o banco devolveria um erro genérico de índice. Nenhum dado é apagado nem
+    escolhido automaticamente: qual valor deve prevalecer é uma decisão humana. Como o
+    DDL do PostgreSQL é transacional, o erro desfaz também o ALTER TABLE anterior.
+    """
+    ja_existe = conn.execute(
+        text("SELECT 1 FROM pg_indexes WHERE schemaname = 'raw' AND indexname = :indice"),
+        {"indice": f"ux_{nome}_data"},
+    ).first()
+    if ja_existe:
+        return
+    duplicadas = conn.execute(
+        text(f"""
+            SELECT data, count(*) FROM raw.{nome}
+            GROUP BY data HAVING count(*) > 1 ORDER BY data LIMIT 5
+        """)
+    ).fetchall()
+    if duplicadas:
+        exemplos = ", ".join(f"{d:%Y-%m-%d} (x{n})" for d, n in duplicadas)
+        raise RuntimeError(
+            f'raw.{nome} tem datas duplicadas (ex.: {exemplos}); a chave única em "data" '
+            "não pode ser criada. Nenhum dado foi alterado: resolva as duplicatas antes."
+        )
 
 
 def _registros(df: pd.DataFrame) -> list[dict]:

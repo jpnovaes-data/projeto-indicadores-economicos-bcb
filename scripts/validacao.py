@@ -1,8 +1,10 @@
 """
 Validação dos CSVs brutos ANTES de tocar o banco.
 
-Se qualquer verificação falhar, a carga é abortada e o banco continua com os
-dados anteriores (que são consistentes). Também pode ser executado sozinho:
+Verifica, por série: arquivo legível, colunas, volume mínimo, datas válidas e únicas,
+NENHUM valor nulo ou não numérico, faixa plausível, rótulo da coluna "serie" e idade
+do último dado. Se qualquer verificação falhar, a carga é abortada e o banco continua
+com os dados anteriores (que são consistentes). Também pode ser executado sozinho:
 
     python scripts/validacao.py
 """
@@ -47,15 +49,24 @@ def validar_dataframe(nome: str, df: pd.DataFrame, hoje: date | None = None) -> 
     if len(df) < regra["min_linhas"]:
         problemas.append(f"{nome}: apenas {len(df)} linhas (mínimo {regra['min_linhas']})")
 
-    if df["data"].isna().any():
-        problemas.append(f"{nome}: há datas nulas")
-    if df["data"].duplicated().any():
+    # Conversões tolerantes: o que não converter vira nulo e é CONTADO (nada passa em silêncio).
+    datas = pd.to_datetime(df["data"], errors="coerce")
+    valores = pd.to_numeric(df["valor"], errors="coerce")
+
+    invalidas = int(datas.isna().sum())
+    if invalidas:
+        problemas.append(f"{nome}: {invalidas} datas nulas ou inválidas")
+    if datas.dropna().duplicated().any():
         problemas.append(f"{nome}: há datas duplicadas")
 
-    validos = df["valor"].dropna()
-    if validos.empty:
-        problemas.append(f"{nome}: nenhum valor numérico")
-    else:
+    # Zero tolerância: o staging do dbt descartaria estes valores sem avisar, e dias ou
+    # meses sumiriam da série em silêncio.
+    ausentes = int(valores.isna().sum())
+    if ausentes:
+        problemas.append(f"{nome}: {ausentes} valores nulos ou não numéricos")
+
+    validos = valores.dropna()
+    if not validos.empty:
         minimo, maximo = regra["faixa"]
         fora = validos[(validos < minimo) | (validos > maximo)]
         if not fora.empty:
@@ -64,8 +75,12 @@ def validar_dataframe(nome: str, df: pd.DataFrame, hoje: date | None = None) -> 
                 f"(ex.: {fora.iloc[0]})"
             )
 
-    if df["data"].notna().any():
-        ultimo = pd.to_datetime(df["data"]).max().date()
+    rotulos = sorted(set(df["serie"].fillna("<vazio>").astype(str)))
+    if rotulos != [nome]:
+        problemas.append(f"{nome}: coluna 'serie' com rótulos {rotulos} (esperado ['{nome}'])")
+
+    if datas.notna().any():
+        ultimo = datas.max().date()
         atraso = (hoje - ultimo).days
         if atraso > regra["max_atraso"]:
             problemas.append(
@@ -83,7 +98,14 @@ def validar_diretorio(diretorio: Path = RAW_DIR, hoje: date | None = None) -> No
         if not caminho.exists():
             problemas.append(f"{nome}: arquivo {caminho} não encontrado")
             continue
-        df = pd.read_csv(caminho, parse_dates=["data"])
+        try:
+            df = pd.read_csv(caminho)
+        except (
+            ValueError,
+            OSError,
+        ) as erro:  # inclui arquivo vazio, malformado e codificação inválida
+            problemas.append(f"{nome}: arquivo ilegível ou vazio ({type(erro).__name__}: {erro})")
+            continue
         problemas.extend(validar_dataframe(nome, df, hoje))
 
     if problemas:

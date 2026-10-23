@@ -5,7 +5,11 @@ models:
     description: "Cotação diária do dólar (venda), sem nulos e ordenada."
     columns:
       - name: data
-        data_tests: [unique, not_null]
+        data_tests:
+          - unique
+          - not_null
+          - serie_diaria_sem_buracos:
+              arguments: {max_dias: 7}  # só dias úteis; maior intervalo real: 5 dias
       - name: dolar_venda
         description: "R$ por US$."
         data_tests:
@@ -34,7 +38,11 @@ models:
     description: "Meta Selic diária, sem nulos e ordenada."
     columns:
       - name: data
-        data_tests: [unique, not_null]
+        data_tests:
+          - unique
+          - not_null
+          - serie_diaria_sem_buracos:
+              arguments: {max_dias: 1}  # publicada todo dia, sem exceção em 9,5 anos
       - name: meta_selic_aa
         description: "Meta Selic em % ao ano."
         data_tests:

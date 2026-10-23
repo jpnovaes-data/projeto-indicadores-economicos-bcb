@@ -61,3 +61,61 @@ def test_serie_saudavel_nao_tem_problemas():
 def test_arquivo_ausente_e_reprovado(tmp_path):
     with pytest.raises(validacao.ErroValidacao, match="não encontrado"):
         validacao.validar_diretorio(tmp_path, HOJE)
+
+
+def test_valores_nulos_parciais_sao_reprovados():
+    """Regressão: 300 nulos em 1.600 linhas passavam, pois só se reprovava série 100% nula."""
+    df = _df([5.0] * 1600)
+    df.loc[df.index[100:400], "valor"] = float("nan")
+    problemas = validacao.validar_dataframe("cambio_dolar", df, HOJE)
+    assert any("300 valores nulos ou não numéricos" in p for p in problemas)
+
+
+def test_um_unico_valor_nulo_ja_e_reprovado():
+    df = _df([5.0] * 1600)
+    df.loc[10, "valor"] = float("nan")
+    assert any(
+        "1 valores nulos" in p for p in validacao.validar_dataframe("cambio_dolar", df, HOJE)
+    )
+
+
+def test_valor_nao_numerico_e_reprovado_sem_quebrar():
+    df = _df([5.0] * 1600).astype({"valor": object})
+    df.loc[3, "valor"] = "abc"
+    problemas = validacao.validar_dataframe("cambio_dolar", df, HOJE)
+    assert any("1 valores nulos ou não numéricos" in p for p in problemas)
+
+
+def test_datas_invalidas_sao_reprovadas_sem_quebrar():
+    df = _df([5.0] * 1600).astype({"data": object})
+    df.loc[2, "data"] = "31/02/2026"
+    problemas = validacao.validar_dataframe("cambio_dolar", df, HOJE)
+    assert any("1 datas nulas ou inválidas" in p for p in problemas)
+
+
+def test_rotulo_de_serie_trocado_e_reprovado():
+    df = _df([5.0] * 1600, nome="selic")  # dados de "selic" dentro do arquivo do dólar
+    problemas = validacao.validar_dataframe("cambio_dolar", df, HOJE)
+    assert any("coluna 'serie'" in p for p in problemas)
+
+
+def test_rotulo_de_serie_vazio_e_reprovado():
+    df = _df([5.0] * 1600)
+    df.loc[0, "serie"] = None
+    assert any("coluna 'serie'" in p for p in validacao.validar_dataframe("cambio_dolar", df, HOJE))
+
+
+def test_csv_vazio_vira_erro_de_validacao_padronizado(tmp_path):
+    for nome in validacao.REGRAS:
+        (tmp_path / f"{nome}.csv").write_text("")
+    with pytest.raises(validacao.ErroValidacao, match="ilegível ou vazio"):
+        validacao.validar_diretorio(tmp_path, HOJE)
+
+
+def test_csv_malformado_vira_erro_de_validacao_padronizado(tmp_path):
+    for nome in validacao.REGRAS:
+        (tmp_path / f"{nome}.csv").write_text(
+            "data,valor,serie\n2026-01-01,1.0\n2026-01-02,2.0,x,y\n"
+        )
+    with pytest.raises(validacao.ErroValidacao, match="ilegível ou vazio"):
+        validacao.validar_diretorio(tmp_path, HOJE)
